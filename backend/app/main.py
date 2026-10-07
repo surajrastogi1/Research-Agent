@@ -3,8 +3,11 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from app.api.auth import router as auth_router
 
-app = FastAPI()
+app = FastAPI(title="AI Research Agent API", version="0.1.0")
+app.include_router(auth_router)
+
 
 @app.get("/")
 def get_health():
