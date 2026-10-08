@@ -23,7 +23,7 @@ def extract_text_content(response_content: Any) -> str:
                 text_parts.append(block)
             elif isinstance(block, dict) and "text" in block:
                 text_parts.append(block["text"])
-        return "\n".join(text_parts).strip()
+        return "".join(text_parts)
 
     return str(response_content).strip()
 
@@ -121,3 +121,71 @@ def process_research(research_id: str, question: str) -> None:
 
     finally:
         db.close()
+
+
+def stream_research_pipeline(question: str):
+    """
+    Generator version of the pipeline. Yields event dicts:
+      {"event": "status", "data": {...}}
+      {"event": "token",  "data": {"text": "..."}}
+      {"event": "sources","data": [...]}
+      {"event": "done",   "data": {"report": "...", "sources": [...]}}
+    The caller is responsible for turning these into SSE frames.
+    """
+    llm = ChatGoogleGenerativeAI(
+        model="gemini-3.5-flash",
+        google_api_key=os.getenv("GEMINI_API_KEY"),
+        temperature=0.2,
+    )
+
+    # 1. Query generation
+    yield {"event": "status", "data": {"stage": "generating_query"}}
+    query_prompt = (
+        "Convert the following research topic into a clear web search query. "
+        "Output ONLY the search query string:\n"
+        f"Topic: {question}"
+    )
+    raw_query_response = llm.invoke(query_prompt).content
+    search_query = extract_text_content(raw_query_response)
+    
+
+    # 2. Web search
+    yield {"event": "status", "data": {"stage": "searching", "query": search_query}}
+    sources_data = search_web(search_query, max_results=4)
+    yield {"event": "sources", "data": sources_data}
+
+    # 3. Synthesis — stream tokens
+    yield {"event": "status", "data": {"stage": "synthesizing"}}
+
+    context_blocks = []
+    for idx, src in enumerate(sources_data, 1):
+        context_blocks.append(
+            f"Source [{idx}]: {src['title']}\nURL: {src['url']}\nContent: {src['content']}\n"
+        )
+    full_context = "\n---\n".join(context_blocks)
+
+    synthesis_prompt = f"""
+    You are an expert technical researcher. Answer the following user question using ONLY the provided sources.
+    Provide a well-structured Markdown report with sections, bullet points, and citations [1], [2], etc.
+
+    User Question: {question}
+
+    Sources:
+    {full_context}
+
+    Write a detailed, informative, and concise report:
+    """
+
+    full_report = ""
+    for chunk in llm.stream(synthesis_prompt):
+        text = extract_text_content(chunk.content)
+        if not text:
+            continue
+        full_report += text
+        yield {"event": "token", "data": {"text": text}}
+        
+    full_report = full_report.strip()
+    yield {
+        "event": "done",
+        "data": {"report": full_report, "sources": sources_data},
+    }
