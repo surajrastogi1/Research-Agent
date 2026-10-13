@@ -47,6 +47,22 @@ export default function Dashboard() {
     load();
   }, []);
 
+  async function deleteResearch(id: string, e: React.MouseEvent) {
+  // Prevent the parent <Link> from navigating to the detail page
+  e.preventDefault();
+  e.stopPropagation();
+
+  if (!confirm("Delete this research? This cannot be undone.")) return;
+
+  try {
+    await apiFetch<void>(`/research/${id}`, { method: "DELETE" });
+    // Remove from local state so the card disappears instantly
+    setItems((prev) => prev.filter((r) => r.id !== id));
+  } catch (err) {
+    alert(err instanceof Error ? err.message : "Failed to delete");
+  }
+}
+
   if (loading) {
     return <div className="max-w-5xl mx-auto p-8 text-gray-500">Loading...</div>;
   }
@@ -81,29 +97,48 @@ export default function Dashboard() {
         <div className="space-y-3">
           {items.map((item) => (
             <Link
-              key={item.id}
-              to={`/research/${item.id}`}
-              className="block bg-white border rounded-lg p-4 hover:border-blue-400 transition"
+            key={item.id}
+            to={`/research/${item.id}`}
+            className="group block bg-white border rounded-lg p-4 hover:border-blue-400 transition relative"
             >
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium truncate">{item.question}</p>
-                  <p className="text-sm text-gray-500 mt-1">
-                    {new Date(item.created_at).toLocaleString()}
-                    {item.sources.length > 0 && (
-                      <> · {item.sources.length} sources</>
-                    )}
-                  </p>
-                </div>
-                <span
-                  className={`text-xs font-medium px-2 py-1 rounded-full whitespace-nowrap ${
-                    statusColors[item.status] || "bg-gray-100 text-gray-800"
-                  }`}
-                >
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <p className="font-medium truncate">{item.question}</p>
+                <p className="text-sm text-gray-500 mt-1">
+                  {new Date(item.created_at).toLocaleString()}
+                  {item.sources.length > 0 && <> · {item.sources.length} sources</>}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`text-xs font-medium px-2 py-1 rounded-full whitespace-nowrap ${statusColors[item.status] || "bg-gray-100 text-gray-800"}`}>
                   {item.status}
                 </span>
+                <button
+                  onClick={(e) => deleteResearch(item.id, e)}
+                  className="opacity-0 group-hover:opacity-100 transition text-gray-400 hover:text-red-600 p-1"
+                  title="Delete research"
+                  aria-label="Delete research"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                    <path d="M10 11v6M14 11v6" />
+                    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                  </svg>
+                </button>
               </div>
-            </Link>
+            </div>
+          </Link>
           ))}
         </div>
       )}
