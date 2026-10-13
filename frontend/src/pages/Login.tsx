@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { apiFetch, setToken } from "../lib/api";
+import { apiFetch } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 
 type AuthResponse = { access_token: string; token_type: string };
