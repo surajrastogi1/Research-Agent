@@ -1,4 +1,5 @@
-import { Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
+import { useAuth } from "./context/AuthContext";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import NewResearch from "./pages/NewResearch";
@@ -6,17 +7,22 @@ import ResearchDetail from "./pages/ResearchDetail";
 import Navbar from "./components/Navbar";
 
 function App() {
-  const location = useLocation();
-  const token = localStorage.getItem("token");
-  const isLoginPage = location.pathname === "/login";
+  const { token, loading } = useAuth();
+
+  // While we're figuring out if the stored token is valid, show a loader.
+  // This prevents flickering between login and dashboard on refresh.
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <p className="text-gray-500">Loading...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Only show navbar when logged in AND not on login page */}
-      {token && !isLoginPage && <Navbar />}
-
+      {token && <Navbar />}
       <Routes>
-        {/* If already logged in, /login redirects to dashboard */}
         <Route
           path="/login"
           element={token ? <Navigate to="/" replace /> : <Login />}

@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { apiFetch, setToken } from "../lib/api";
+import { apiFetch } from "../lib/api";
+import { useAuth } from "../context/AuthContext";
 
 type AuthResponse = { access_token: string; token_type: string };
 
@@ -11,6 +12,7 @@ export default function Login() {
   const [mode, setMode] = useState<"login" | "register">("login");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const { login } = useAuth()
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -30,7 +32,7 @@ export default function Login() {
         body: JSON.stringify({ email, password }),
       });
 
-      setToken(data.access_token);
+      await login(data.access_token);   // ← context method, not setToken()
       navigate("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");

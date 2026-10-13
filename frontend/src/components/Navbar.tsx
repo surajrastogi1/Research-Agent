@@ -1,11 +1,12 @@
 import { Link, useNavigate } from "react-router-dom";
-import { clearToken } from "../lib/api";
+import { useAuth } from "../context/AuthContext";
 
 export default function Navbar() {
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
 
   function handleLogout() {
-    clearToken();
+    logout();
     navigate("/login");
   }
 
@@ -16,6 +17,11 @@ export default function Navbar() {
           Research Agent
         </Link>
         <div className="flex items-center gap-4">
+          {user && (
+            <span className="text-sm text-gray-500 hidden sm:inline">
+              {user.email}
+            </span>
+          )}
           <Link
             to="/new"
             className="text-sm font-medium text-blue-600 hover:text-blue-800"
