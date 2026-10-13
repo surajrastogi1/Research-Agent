@@ -86,6 +86,31 @@ def get_research_by_id(
         )
     return research
 
+@router.delete("/{research_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_research(
+    research_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Delete a research job and its sources.
+    Scoped to the current user — you can only delete your own research.
+    """
+    research = (
+        db.query(Research)
+        .filter(Research.id == research_id, Research.user_id == current_user.id)
+        .first()
+    )
+    if not research:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Research not found or unauthorized access",
+        )
+
+    db.delete(research)
+    db.commit()
+    # No response body — 204 means success with nothing to return
+
 def _sse(event: str, data: dict) -> str:
     """Format a dict as an SSE frame."""
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"

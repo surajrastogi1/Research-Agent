@@ -43,6 +43,12 @@ class Research(Base):
         "Source", back_populates="research", cascade="all, delete-orphan"
     )
 
+    sources = relationship(
+        "Source",
+        back_populates="research",
+        cascade="all, delete-orphan",
+    )
+
 
 class Source(Base):
     __tablename__ = "sources"

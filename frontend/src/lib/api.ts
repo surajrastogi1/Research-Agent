@@ -39,5 +39,10 @@ export async function apiFetch<T>(
     throw new Error(err.detail || "Request failed");
   }
 
+  // NEW — 204 No Content has no body to parse
+  if (res.status === 204) {
+    return undefined as T;
+  }
+
   return res.json();
 }
