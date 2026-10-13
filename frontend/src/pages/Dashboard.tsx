@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiFetch } from "../lib/api";
+import { useToast } from "../context/ToastContext";
 
 type Source = {
   id: string;
@@ -32,6 +33,7 @@ export default function Dashboard() {
   const [items, setItems] = useState<Research[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const toast = useToast();
 
   useEffect(() => {
     async function load() {
@@ -48,21 +50,19 @@ export default function Dashboard() {
   }, []);
 
   async function deleteResearch(id: string, e: React.MouseEvent) {
-  // Prevent the parent <Link> from navigating to the detail page
   e.preventDefault();
   e.stopPropagation();
 
   if (!confirm("Delete this research? This cannot be undone.")) return;
 
   try {
-    await apiFetch<void>(`/research/${id}`, { method: "DELETE" });
-    // Remove from local state so the card disappears instantly
+    await apiFetch(`/research/${id}`, { method: "DELETE" });
     setItems((prev) => prev.filter((r) => r.id !== id));
+    toast.success("Research deleted");
   } catch (err) {
-    alert(err instanceof Error ? err.message : "Failed to delete");
+    toast.error(err instanceof Error ? err.message : "Failed to delete");
   }
 }
-
   if (loading) {
     return <div className="max-w-5xl mx-auto p-8 text-gray-500">Loading...</div>;
   }
