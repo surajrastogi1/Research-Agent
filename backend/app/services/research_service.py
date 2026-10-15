@@ -1,12 +1,8 @@
 import os
-from typing import Dict, List, Any
+from typing import Dict, Any
 from langchain_google_genai import ChatGoogleGenerativeAI
-from datetime import datetime, timezone
-import logging
 
 from app.services.search_service import search_web
-from app.db.session import SessionLocal
-from app.models.models import Research, Source
 
 def extract_text_content(response_content: Any) -> str:
     """
@@ -34,7 +30,7 @@ def run_research_pipeline(question: str) -> Dict[str, Any]:
     3. Uses LLM to synthesize findings into a cited report.
     """
     llm = ChatGoogleGenerativeAI(
-        model="gemini-3.8-flash",
+        model="gemini-3.7-flash",
         google_api_key=os.getenv("GEMINI_API_KEY"),
         temperature=0.2
     )
@@ -75,52 +71,52 @@ def run_research_pipeline(question: str) -> Dict[str, Any]:
         "sources": sources_data
     }
 
-def process_research(research_id: str, question: str) -> None:
-    """
-    Runs the research pipeline in the background.
-    Opens its OWN DB session — must NOT reuse the request's session,
-    because that one is closed once the HTTP response is sent.
-    """
-    db = SessionLocal()
-    try:
-        # 1. Mark as processing
-        research = db.query(Research).filter(Research.id == research_id).first()
-        if not research:
-            return  # row was deleted; nothing to do
+# def process_research(research_id: str, question: str) -> None:
+#     """
+#     Runs the research pipeline in the background.
+#     Opens its OWN DB session — must NOT reuse the request's session,
+#     because that one is closed once the HTTP response is sent.
+#     """
+#     db = SessionLocal()
+#     try:
+#         # 1. Mark as processing
+#         research = db.query(Research).filter(Research.id == research_id).first()
+#         if not research:
+#             return  # row was deleted; nothing to do
 
-        research.status = "processing"
-        db.commit()
+#         research.status = "processing"
+#         db.commit()
 
-        # 2. Run the agent
-        result = run_research_pipeline(question)
+#         # 2. Run the agent
+#         result = run_research_pipeline(question)
 
-        # 3. Save sources
-        for src in result["sources"]:
-            db.add(Source(
-                research_id=research.id,
-                title=src["title"],
-                url=src["url"],
-                content=src["content"],
-            ))
+#         # 3. Save sources
+#         for src in result["sources"]:
+#             db.add(Source(
+#                 research_id=research.id,
+#                 title=src["title"],
+#                 url=src["url"],
+#                 content=src["content"],
+#             ))
 
-        # 4. Save report + finish
-        research.report = result["report"]
-        research.status = "completed"
-        research.completed_at = datetime.now(timezone.utc)
-        db.commit()
+#         # 4. Save report + finish
+#         research.report = result["report"]
+#         research.status = "completed"
+#         research.completed_at = datetime.now(timezone.utc)
+#         db.commit()
 
-    except Exception:
-        db.rollback()
-        # Mark as failed so the client can stop polling
-        research = db.query(Research).filter(Research.id == research_id).first()
-        if research:
-            research.status = "failed"
-            db.commit()
-        # Re-raise so BackgroundTasks logs it (FastAPI won't swallow it silently)
-        raise
+#     except Exception:
+#         db.rollback()
+#         # Mark as failed so the client can stop polling
+#         research = db.query(Research).filter(Research.id == research_id).first()
+#         if research:
+#             research.status = "failed"
+#             db.commit()
+#         # Re-raise so BackgroundTasks logs it (FastAPI won't swallow it silently)
+#         raise
 
-    finally:
-        db.close()
+#     finally:
+#         db.close()
 
 
 def stream_research_pipeline(question: str):
@@ -133,7 +129,7 @@ def stream_research_pipeline(question: str):
     The caller is responsible for turning these into SSE frames.
     """
     llm = ChatGoogleGenerativeAI(
-        model="gemini-3.5-flash",
+        model="gemini-3-flash",
         google_api_key=os.getenv("GEMINI_API_KEY"),
         temperature=0.2,
     )
