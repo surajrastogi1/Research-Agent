@@ -3,6 +3,7 @@
 > An AI-powered research agent that searches the web and synthesizes cited reports from real sources — streaming live to your browser.
 
 **🌐 Live Demo:** [research-agent-pi-nine.vercel.app](https://research-agent-pi-nine.vercel.app)  
+**🔌 API Docs:** [research-agent-api-5w1s.onrender.com/docs](https://research-agent-api-5w1s.onrender.com/docs)
 
 ---
 
@@ -28,7 +29,8 @@ Every claim in the report cites a numbered source, so you can verify what the AI
 - **Persistent History** — every research job is saved to your account
 - **Multi-Stage Pipeline** — query rewriting, web search, and synthesis as distinct stages
 - **Background Jobs** — long-running research runs asynchronously (non-blocking)
-- **User-Scoped Data** — you can only see your own research
+- **Delete Research** — remove old reports with cascade delete for sources
+- **User-Scoped Data** — you can only see and delete your own research
 - **Responsive UI** — works on desktop and mobile
 
 ---
@@ -47,6 +49,7 @@ Every claim in the report cites a numbered source, so you can verify what the AI
 | LLM | Google Gemini (`langchain-google-genai`) |
 | Web Search | Tavily API |
 | Streaming | Server-Sent Events (SSE) |
+| Background Jobs | FastAPI `BackgroundTasks` |
 
 ### Frontend
 | Layer | Tech |
@@ -56,6 +59,7 @@ Every claim in the report cites a numbered source, so you can verify what the AI
 | Routing | React Router v6 |
 | Styling | Tailwind CSS v4 |
 | Markdown | react-markdown |
+| State | React Context (Auth, Toast) |
 
 ### Infrastructure
 | Layer | Tech |
@@ -85,7 +89,8 @@ Every claim in the report cites a numbered source, so you can verify what the AI
 │  ├── POST /research/         (background job)           │
 │  ├── POST /research/stream   (SSE live streaming)       │
 │  ├── GET  /research/         (user-scoped list)         │
-│  └── GET  /research/{id}     (detail with sources)      │
+│  ├── GET  /research/{id}     (detail with sources)      │
+│  └── DELETE /research/{id}   (delete with cascade)      │
 └──────────────────────┬──────────────────────────────────┘
                        │
                        ▼
@@ -127,6 +132,8 @@ cd Research-Agent
 ### 2. Backend Setup
 
 ```bash
+cd backend
+
 # Create and activate a virtual environment
 python -m venv .venv
 source .venv/bin/activate        # macOS/Linux
@@ -142,10 +149,10 @@ cp .env.example .env
 Edit `.env` with your credentials:
 
 ```env
-# Neon pooled connection string (for the app)
+# Neon pooled connection string (used by the running app)
 DATABASE_URL=postgresql://user:pass@ep-xxx-pooler.region.aws.neon.tech/neondb?sslmode=require
 
-# Neon direct connection string (for migrations)
+# Neon direct connection string (used by Alembic migrations)
 DATABASE_URL_DIRECT=postgresql://user:pass@ep-xxx.region.aws.neon.tech/neondb?sslmode=require
 
 # JWT
@@ -179,7 +186,7 @@ Backend is now at `http://127.0.0.1:8000` — Swagger docs at `/docs`.
 ### 3. Frontend Setup
 
 ```bash
-cd research-agent-frontend
+cd ../research-agent-frontend
 
 # Install dependencies
 npm install
@@ -219,9 +226,10 @@ Frontend is now at `http://localhost:5173`.
 | Method | Endpoint | Description |
 |---|---|---|
 | `POST` | `/research/` | Create a research job (background task, returns 202) |
-| `POST` | `/research/stream` | Same pipeline, but streamed live via SSE |
+| `POST` | `/research/stream` | Same pipeline, streamed live via SSE |
 | `GET` | `/research/` | List all research for the current user |
 | `GET` | `/research/{id}` | Get a specific research with its sources |
+| `DELETE` | `/research/{id}` | Delete a research and its sources (204 No Content) |
 
 All research endpoints require an `Authorization: Bearer <token>` header.
 
@@ -287,40 +295,45 @@ After the stream completes, sources are saved as `Source` rows linked to the `Re
 
 ```
 Research-Agent/
-├── app/
-│   ├── api/
-│   │   ├── deps.py                # get_current_user, get_db
-│   │   └── routes/
-│   │       ├── auth.py            # register, login, me
-│   │       └── research.py        # create, list, get, stream
-│   ├── core/
-│   │   └── security.py            # JWT + bcrypt helpers
-│   ├── db/
-│   │   └── session.py             # engine, SessionLocal, get_db
-│   ├── models/
-│   │   └── models.py              # User, Research, Source
-│   ├── schemas/
-│   │   ├── user.py                # UserCreate, UserResponse, Token
-│   │   └── research.py            # ResearchCreate, ResearchResponse, SourceResponse
-│   ├── services/
-│   │   ├── search_service.py      # Tavily wrapper
-│   │   └── research_service.py    # Pipeline + background task
-│   └── main.py                    # FastAPI app + CORS
-├── alembic/                       # DB migrations
-├── requirements.txt
-├── .env.example
+├── backend/
+│   ├── app/
+│   │   ├── api/
+│   │   │   ├── deps.py                # get_current_user, get_db
+│   │   │   └── routes/
+│   │   │       ├── auth.py            # register, login, me
+│   │   │       └── research.py        # create, list, get, delete, stream
+│   │   ├── core/
+│   │   │   └── security.py            # JWT + bcrypt helpers
+│   │   ├── db/
+│   │   │   └── session.py             # engine, SessionLocal, get_db
+│   │   ├── models/
+│   │   │   └── models.py              # User, Research, Source
+│   │   ├── schemas/
+│   │   │   ├── user.py                # UserCreate, UserResponse, Token
+│   │   │   └── research.py            # ResearchCreate, ResearchResponse, SourceResponse
+│   │   ├── services/
+│   │   │   ├── search_service.py      # Tavily wrapper
+│   │   │   └── research_service.py    # Pipeline + background task
+│   │   └── main.py                    # FastAPI app + CORS
+│   ├── alembic/                       # DB migrations
+│   └── requirements.txt
 └── research-agent-frontend/
     ├── src/
-    │   ├── lib/api.ts             # fetch wrapper + auth helpers
-    │   ├── components/Navbar.tsx
+    │   ├── lib/api.ts                 # fetch wrapper + auth helpers
+    │   ├── context/
+    │   │   ├── AuthContext.tsx        # auth state (user, token, login, logout)
+    │   │   └── ToastContext.tsx       # toast notifications
+    │   ├── components/
+    │   │   ├── Navbar.tsx
+    │   │   └── ErrorBoundary.tsx
     │   ├── pages/
     │   │   ├── Login.tsx
     │   │   ├── Dashboard.tsx
-    │   │   ├── NewResearch.tsx    # Live SSE streaming
+    │   │   ├── NewResearch.tsx        # Live SSE streaming
     │   │   └── ResearchDetail.tsx
     │   ├── App.tsx
     │   └── main.tsx
-    ├── vercel.json                # SPA rewrite config
+    ├── vercel.json                    # SPA rewrite config
     └── package.json
 ```
 
@@ -332,7 +345,7 @@ Research-Agent/
 
 1. Create a new **Web Service** on [render.com](https://render.com)
 2. Connect your GitHub repo
-3. Set **Root Directory** to the repo root
+3. Set **Root Directory** to `backend`
 4. **Build Command:** `pip install -r requirements.txt`
 5. **Start Command:** `python -m alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT`
 6. Add environment variables (same as `.env`)
@@ -342,7 +355,7 @@ Research-Agent/
 1. Import the repo on [vercel.com](https://vercel.com)
 2. Set **Root Directory** to `research-agent-frontend`
 3. Framework preset: **Vite**
-4. Add env var: `VITE_API_URL=https://your-backend.onrender.com`
+4. Add env var: `VITE_API_URL=https://your-backend.onrender.com` (no trailing slash)
 5. Deploy
 
 **Important:** After deploying the frontend, add its URL to Render's `CORS_ORIGINS`:
@@ -392,26 +405,30 @@ You should see SSE events arriving in real time.
 
 ---
 
-## ⚠️ Known Limitations (V1)
+## ⚠️ Known Limitations
 
-- Synchronous background processing — jobs run in the API process (moving to Celery + Redis in V2)
-- Gemini free tier: **20 requests/day per model** — the app may hit quota during heavy use
-- Render free tier spins down after 15 minutes idle (first request after wake: ~30s)
-- No rate limiting per user
-- No shareable public reports
-- No follow-up questions
+- **Background processing runs in-process** — `BackgroundTasks` doesn't survive API restarts. Long jobs may be lost if the server crashes mid-run.
+- **Gemini free tier:** 20 requests/day per model on `gemini-3.8-flash`. The app may hit quota during heavy use.
+- **Render free tier** spins down after 15 minutes idle — the first request after wake takes ~30 seconds.
+- **No rate limiting per user** — one user could exhaust the Gemini quota.
+- **No shareable public reports** — every report is private to the user who created it.
+- **No follow-up questions** — each research is a one-shot job.
 
 ---
 
-## 🗺 Roadmap (V2)
+## 🗺 Roadmap (Not Yet Deployed)
 
-- [ ] Celery + Redis for real distributed background workers
-- [ ] Multi-query research (generate 3–5 sub-queries per question)
-- [ ] Follow-up questions with conversation context
-- [ ] Per-user rate limiting
-- [ ] Public shareable report links
-- [ ] Copy / export report as PDF
-- [ ] Dark mode
+A separate `v2` branch contains experiments and improvements that aren't deployed:
+
+- **Celery + Redis** — real distributed worker (built and tested locally; requires paid worker hosting)
+- **Multi-query research** — generate 3–5 sub-queries per question
+- **Follow-up questions** — chat over an existing report
+- **Per-user rate limiting** — daily caps to protect shared API quotas
+- **Public shareable reports** — read-only links
+- **PDF export** — download the report as a document
+- **Dark mode**
+
+See `v2` branch for details.
 
 ---
 
