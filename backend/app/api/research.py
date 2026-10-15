@@ -13,8 +13,8 @@ from app.db.session import get_db, SessionLocal
 from app.models.models import Research, User, Source
 from app.schemas.research import ResearchCreate, ResearchResponse
 from app.services.research_service import run_research_pipeline
-from app.services.research_service import process_research
-from app.services.research_service import process_research, stream_research_pipeline
+from app.worker import process_research_task
+from app.services.research_service import stream_research_pipeline
 
 router = APIRouter(prefix="/research", tags=["Research"])
 
@@ -23,11 +23,9 @@ logger = logging.getLogger(__name__)
 @router.post("/", response_model=ResearchResponse, status_code=status.HTTP_202_ACCEPTED)
 def create_research(
     research_in: ResearchCreate,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # 1. Create the row immediately — client gets an ID right now
     new_research = Research(
         user_id=current_user.id,
         question=research_in.question,
@@ -37,14 +35,9 @@ def create_research(
     db.commit()
     db.refresh(new_research)
 
-    # 2. Schedule the agent to run AFTER the response is sent
-    background_tasks.add_task(
-        process_research,
-        str(new_research.id),
-        research_in.question,
-    )
+    # Enqueue on Celery instead of BackgroundTasks
+    process_research_task.delay(str(new_research.id), research_in.question)
 
-    # 3. Return 202 immediately with the pending job
     return new_research
 
 @router.get("/", response_model=List[ResearchResponse])
