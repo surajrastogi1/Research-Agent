@@ -426,7 +426,6 @@ A separate `v2` branch contains experiments and improvements that aren't deploye
 - **Per-user rate limiting** — daily caps to protect shared API quotas
 - **Public shareable reports** — read-only links
 - **PDF export** — download the report as a document
-- **Dark mode**
 
 See `v2` branch for details.
 
